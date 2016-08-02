@@ -1,20 +1,30 @@
 <link rel="import" href="../polymer/polymer.html">
 
+<link rel="import" href="../oc-extra-set-edit/oc-extra-set-edit.html">
+<link rel="import" href="../oc-product-library-extras-api/oc-product-library-extras-api.html">
 <!--
 `oc-library-extra-set-edit`
-Element for editing a global extra set
+Element for editing a local extra set
 
-@demo demo/index.html 
+@demo demo/index.html
 -->
 
 <dom-module id="oc-library-extra-set-edit">
+
+  <style>
+    :host {
+      display: block;
+    }
+  </style>
+
   <template>
-    <style>
-      :host {
-        display: block;
-      }
-    </style>
-    <h2>Hello [[prop1]]</h2>
+    <oc-product-library-extras-api id="extrasApi"></oc-product-library-extras-api>
+    <oc-extra-set-edit
+            id="editExtraSetControl"
+            on-save-extra-set="_onSaveExtraSet"
+            on-create-extra="_onCreateExtra"
+            on-delete-extra="_onDeleteExtra"
+    ></oc-extra-set-edit>
   </template>
 
   <script>
@@ -23,11 +33,75 @@ Element for editing a global extra set
       is: 'oc-library-extra-set-edit',
 
       properties: {
-        prop1: {
-          type: String,
-          value: 'oc-library-extra-set-edit',
-        },
+        organisationId: Number,
+        extraSetId: Number,
+        loading: {
+          type: Boolean,
+          value: false,
+          notify: true
+        }
       },
+
+      observers: [
+        '_loadExtraSet(organisationId,extraSetId)'
+      ],
+
+      _loadExtraSet: function() {
+        if (this.organisationId) {
+          this.loading = true;
+          this.$.extrasApi.getExtraSet(this.extraSetId)
+                  .then(function (request) {
+                    this.$.editExtraSetControl.setExtraSet(request.response);
+                    this.$.editExtraSetControl.setExtras(request.response.extras);
+                  }.bind(this))
+                  .catch(this.fire.bind(this, 'extras-error', 'Could not load extra set'))
+                  .finally(this.set.bind(this, 'loading', false));
+        }
+      },
+
+      _onSaveExtraSet: function(event) {
+        this.loading = true;
+        this.$.extrasApi.updateExtraSet(this.extraSetId, event.detail)
+                .catch(this.fire.bind(this, 'extras-error', 'Could not update extra set'))
+                .finally(this.set.bind(this, 'loading', false));
+      },
+
+      _onCreateExtra: function(event) {
+        this.loading = true;
+        this.$.extrasApi.createExtra(this.organisationId,
+                {
+                  name: event.detail.name,
+                  price: event.detail.price,
+                  description: event.detail.description,
+                  setId: this.extraSetId})
+                .then(function() {this._refreshExtras()}.bind(this))
+                .catch(function() {
+                  this.loading = false;
+                  this.fire('extras-error', 'Could not create extra')
+                }.bind(this));
+      },
+
+      _refreshExtras: function() {
+        this.loading = true;
+        this.$.extrasApi.getExtraSet(this.extraSetId)
+                .then(function(request) {
+                  this.$.editExtraSetControl.setExtras(request.response.extras);
+                }.bind(this))
+                .catch(this.fire.bind(this, 'extras-error', 'Could not load extras'))
+                .finally(function () {
+                  this.$.editExtraSetControl.showNewExtraInput(false);
+                  this.loading = false;
+                }.bind(this));
+      },
+
+      _onDeleteExtra: function(event) {
+        this.loading = true;
+        this.$.extrasApi.deleteExtra(event.detail.id)
+                .then(function () {
+                  this._refreshExtras();
+                }.bind(this))
+                .catch(this.fire.bind(this, 'extras-error', 'Could not delete extra'));
+      }
 
     });
   </script>
